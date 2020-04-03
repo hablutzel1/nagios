@@ -55,6 +55,11 @@ And lets add the command to a service check:
 
 The above service check runs on the nagios defined host "localhost", uses the (default) service template "generic-service" and had the contact "nagiosadmin". As you can see, the URL maps to $ARG1$, the warning hours to $ARG2$ and the critical hours to $ARG3$. This means that if the field *"Next Update:"* is less then 8 hours in the future you get a warning and if it is less then 6 hours you get a critical.
 
+#### TODOS
+
+- Optionally allow to fully validate the CRL, i.e. openssl crl -CAfile ... -in file.crl. In that case the path to the CAfile should be received as an argument.
+- Compare 'check_crl' against the other forks for https://github.com/RaymiiOrg/nagios.
+
 #### Changelog
 
 03-04-2013:
