@@ -53,7 +53,7 @@ Author: R. van Elst (https://raymii.org)
 Before the usage of this check plugin it is required to set up a SSH master connection:
 
 ```
-$ ssh -fNMS "~/.ssh/S.%r@%h:%p" pseoperator@<HSM_IP>
+$ ssh -fNMS "~/.ssh/S.%r@%h:%p" pseoperator@<HSM_HOSTNAME>
 ```
 
 Note: When calling the check plugin as a Nagios active check, the previous will require to be executed for the user running the Nagios process, for example, with something like `sudo -u nagios ...`. 
@@ -61,5 +61,13 @@ Note: When calling the check plugin as a Nagios active check, the previous will 
 Then the check plugin can be called like this:
 
 ```
-./check_protectserver_appliance_load.sh <HSM_IP> <WLOAD1> <WLOAD5> <WLOAD10> <CLOAD1> <CLOAD5> <CLOAD10>
+./check_protectserver_appliance_load.sh <HSM_HOSTNAME> <WLOAD1> <WLOAD5> <WLOAD10> <CLOAD1> <CLOAD5> <CLOAD10>
+0.3 0.2 0.1
+```
+
+## check_with_ctalarm.sh
+
+```
+$ ./check_with_ctalarm.sh <HSM_HOSTNAME>
+OK
 ```
