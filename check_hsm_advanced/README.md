@@ -1,8 +1,9 @@
-# check_hsm
-Monitor a Safenet ProtectServer HSM
+# Monitor a Safenet ProtectServer HSM
 Author: R. van Elst (https://raymii.org)
 
-## Usage
+## hsm.sh
+
+### Usage
 
     usage: ./hsm.sh options
 
@@ -26,7 +27,7 @@ Author: R. van Elst (https://raymii.org)
 
 
 
-## Examples
+### Examples
 
     user@host ~$ ./hsm.sh -n hsm-038 -t ram
     OK: RAM Usage OK: 41% used, ( 10192256 total). HSM: hsm-038.
@@ -40,3 +41,25 @@ Author: R. van Elst (https://raymii.org)
     OK: HSM: hsm-038; Serial Number:[...]; Model: [...]; Device Revision: F; Firmware Revision: [...]; Manufacturing Date: [...]; Device Batch: [...]; PTKC Revision: [...]; Slot Count: [...] Security Mode: [...]; Transport Mode:[...]; Event Log Count: 88.
     user@host ~$ ./hsm.sh -n hsm-038 -t battery
     OK: Battery status is good for HSM: hsm-038
+
+## check_protectserver_appliance_load.sh
+
+**Usage of this plugin is (currently) very dangerous cause several failed attempts to login to the appliance through SSH could potentially lock the 'admin' account permanently, requiring to destroy all HSM objects for recovery.**
+
+- TODO test and confirm if 10 consecutive failed login attempts with 'pseoperator' account could lock permanently the 'admin' account as the documentation isn't totally clear about it: "As a security measure, the admin account is locked out after 10 consecutive failed login attempts using the console". Consider that maybe if the 'pseoperator' user is locked, the 'admin' user could unlock it, which could allow us to remove the warning above.
+
+### Usage
+
+Before the usage of this check plugin it is required to set up a SSH master connection:
+
+```
+$ ssh -fNMS "~/.ssh/S.%r@%h:%p" pseoperator@<HSM_IP>
+```
+
+Note: When calling the check plugin as a Nagios active check, the previous will require to be executed for the user running the Nagios process, for example, with something like `sudo -u nagios ...`. 
+
+Then the check plugin can be called like this:
+
+```
+./check_protectserver_appliance_load.sh <HSM_IP> <WLOAD1> <WLOAD5> <WLOAD10> <CLOAD1> <CLOAD5> <CLOAD10>
+```
