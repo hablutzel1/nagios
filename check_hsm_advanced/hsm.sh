@@ -254,7 +254,7 @@ case ${CHECK_TYPE} in
     "eventlog")
         check_hsm_eventlog;
         ;;
-    ?)
+    *)
         echo "Check type not supported."
         usage
         ;;
