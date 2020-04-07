@@ -62,7 +62,7 @@ Then the check plugin can be called like this:
 
 ```
 ./check_protectserver_appliance_load.sh <HSM_HOSTNAME> <WLOAD1> <WLOAD5> <WLOAD10> <CLOAD1> <CLOAD5> <CLOAD10>
-0.3 0.2 0.1
+load average: 0.3 0.2 0.1
 ```
 
 ## check_with_ctalarm.sh
@@ -70,4 +70,13 @@ Then the check plugin can be called like this:
 ```
 $ ./check_with_ctalarm.sh <HSM_HOSTNAME>
 OK
+```
+
+## check_protectserver_hsm_load.sh
+
+Note that `WARNING` and `CRITICAL` are expected to be integers from 0-100 (percentage), e.g. 60.
+
+```
+./check_protectserver_hsm_load.sh <HSM_HOSTNAME> <MEASURING_TIME> <WARNING> <CRITICAL>
+load average: 65%
 ```

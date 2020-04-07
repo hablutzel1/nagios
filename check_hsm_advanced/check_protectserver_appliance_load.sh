@@ -41,5 +41,5 @@ do
     fi
 done
 
-echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]} ${BASH_REMATCH[3]}"
+echo "load average: ${BASH_REMATCH[1]} ${BASH_REMATCH[2]} ${BASH_REMATCH[3]}"
 exit ${res}
