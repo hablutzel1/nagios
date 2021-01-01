@@ -43,7 +43,7 @@ Usage: $0 [--help] [-H localhost] [-P 80]
           [--noverify] [--max-age AGE]"
           [--path-to-openssl /usr/bin/openssl]
           [--url http://\$hostname:\$port]"]
-          [--openssl-command /some/other/command]
+          [--openssl-alt-options "-nonce -issuer ..."]
 
 Notes:
   If --url is not specified it is assumed to be http://host_name
@@ -81,8 +81,8 @@ do
       OPENSSL=$2
       shift 2
     ;;
-    --openssl-command)
-      OPENSSL_COMMAND=$2
+    --openssl-alt-options)
+      OPENSSL_ALT_OPTIONS=$2
       shift 2
     ;;
     --url)
@@ -211,13 +211,18 @@ if [ ! -f "$ISSUER" ]; then
 fi
 
 # If no URL provided from command line, generate a sensible one from hostname and port
+# TODO do not output $OCSPURL as it might not match the one provided with $OPENSSL_ALT_OPTIONS.
 if [ -z "$OCSPURL" ]; then
     OCSPURL="http://$HOSTNAME:$PORT"
 fi
 
-# If openssl command was not specified in arguments, then generate a sensible one
-if [ -z "$OPENSSL_COMMAND" ]; then
-	OPENSSL_COMMAND="$OPENSSL ocsp $OPTIONS -nonce -issuer $ISSUER -cert $CERT -url "$OCSPURL" 2>&1"
+OPENSSL_COMMAND="$OPENSSL ocsp -resp_text $OPTIONS"
+# If openssl alternative options were not specified in arguments, then generate sensible ones
+if [ -z "$OPENSSL_ALT_OPTIONS" ]; then
+  # TODO check: apparently the double quotes around $OCSPURL inside the string make the following command fail.
+	OPENSSL_COMMAND="$OPENSSL_COMMAND -nonce -issuer $ISSUER -cert $CERT -url $OCSPURL"
+else
+	OPENSSL_COMMAND="$OPENSSL_COMMAND $OPENSSL_ALT_OPTIONS"
 fi
 
 # If verbose is specified, print out our actual openssl command
@@ -225,8 +230,8 @@ if [ ! -z $VERBOSE ]; then
   echo "DEBUG: Executing: $OPENSSL_COMMAND"
 fi
 
-
-OCSPRESPONSE=$($OPENSSL_COMMAND)
+# NOTE that receiving the " 2>&1" as part of the $OPENSSL_COMMAND string value is not working: with Bash version 4.4.20(1)-release in Ubuntu 18.04 it has been observed being received as a single-quoted string in the following command substitution. TODO review the history of the following line and then understand this appropriately as well as how it was supposed to be working before, maybe in previous Bash versions.
+OCSPRESPONSE=$($OPENSSL_COMMAND 2>&1)
 RESULT=$?
 if [[ $RESULT -ne 0 ]]; then
     if [[ "$OCSPRESPONSE" =~ "OCSP_parse_url:error parsing url" ]]; then
@@ -271,7 +276,20 @@ fi
 
 echo "$OCSPRESPONSE" | grep -q ": good"
 if [[ $? -eq 0 ]]; then
-    echo -n "OK: OCSP up and running - status of certificate for ${CERTCN} GOOD by OCSP: ${OCSPURL} " 
+    # TODO recognize (and provide appropriate output) when the following command fails for reasons different than expiration, e.g. when the provided certificate doesn't have the correct format.
+    # TODO for the following expiration validations, for error results only output the details of the expiring certificate.
+    # TODO receive the CRITICAL and WARNING thresholds as arguments. It is currently hardcoded to 15 and 20 days respectively!.
+    if ! echo "${OCSPRESPONSE}" | openssl x509 -noout -checkend $(( 15 * 86400 )) > /dev/null ; then
+      echo -n "CRITICAL: OCSP responder certificate will expire in less than 15 days."
+      echo $OCSPRESPONSE
+      exit $CRITICAL
+    fi
+    if ! echo "${OCSPRESPONSE}" | openssl x509 -noout -checkend $(( 20 * 86400 )) > /dev/null ; then
+      echo -n "WARNING: OCSP responder certificate will expire in less than 20 days."
+      echo $OCSPRESPONSE
+      exit $WARNING
+    fi
+    echo -n "OK: OCSP up and running. OCSP signer certificate not about to expire. Status of certificate for ${CERTCN} GOOD by OCSP: ${OCSPURL} "
     echo $OCSPRESPONSE
     exit $OK
 fi
