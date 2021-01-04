@@ -230,47 +230,54 @@ if [ ! -z $VERBOSE ]; then
   echo "DEBUG: Executing: $OPENSSL_COMMAND"
 fi
 
-# NOTE that receiving the " 2>&1" as part of the $OPENSSL_COMMAND string value is not working: with Bash version 4.4.20(1)-release in Ubuntu 18.04 it has been observed being received as a single-quoted string in the following command substitution. TODO review the history of the following line and then understand this appropriately as well as how it was supposed to be working before, maybe in previous Bash versions.
-OCSPRESPONSE=$($OPENSSL_COMMAND 2>&1)
+# NOTE that setting "2>&1" (as it was before) as part of the $OPENSSL_COMMAND string value is not working: with Bash version 4.4.20(1)-release in Ubuntu 18.04 it has been observed being received as a single-quoted string in the following command substitution. TODO review the history of the following line and then understand this appropriately as well as how it was supposed to be working before, maybe in previous Bash versions.
+# TODO evaluate to get the binary OCSP response as the result of the following command, so it can be later used for friendly status reporting or for extracting the OCSP signer certificate for expiration validation.
+error_file=$(mktemp)
+out=$($OPENSSL_COMMAND 2>$error_file)
+err=$(< $error_file)
+rm $error_file
+NL=$'\n'
+OCSPRESPONSE="${err}${NL}${out}"
+
 RESULT=$?
 if [[ $RESULT -ne 0 ]]; then
     if [[ "$OCSPRESPONSE" =~ "OCSP_parse_url:error parsing url" ]]; then
         echo "CRITICAL: OCSP URL parse error."
-        echo $OCSPRESPONSE
+        echo "$OCSPRESPONSE"
         exit $CRITICAL
     fi
     if [[ "$OCSPRESPONSE" =~ "Connection refused" ]]; then
         echo "CRITICAL: OCSP refused connection."
-        echo $OCSPRESPONSE
+        echo "$OCSPRESPONSE"
         exit $CRITICAL
     fi
     if [[ "$OCSPRESPONSE" =~ "Code=404" ]]; then
         echo "CRITICAL: OCSP returns HTTP error 404 (Not Found)."
-        echo $OCSPRESPONSE
+        echo "$OCSPRESPONSE"
         exit $CRITICAL
     fi
-    echo -n "CRITICAL: OCSP check FAILED for OCSP: ${OCSPURL}. " 
-    echo $OCSPRESPONSE
+    echo -n "CRITICAL: OCSP check FAILED for OCSP: ${OCSPURL}. "
+    echo "$OCSPRESPONSE"
     exit $CRITICAL
 fi
 
 echo "$OCSPRESPONSE" | grep -q ": revoked"
 if [[ $? -eq 0 ]]; then
     echo -n "CRITICAL: certificate for ${CERTCN} REVOKED by OCSP: ${OCSPURL} "
-    echo $OCSPRESPONSE
+    echo "$OCSPRESPONSE"
     exit $CRITICAL
 fi
 
 echo "$OCSPRESPONSE" | grep -q ": unknown"
 if [[ $? -eq 0 ]]; then
-    echo -n "WARNING: status of certificate for ${CERTCN} UNKNOWN by OCSP: ${OCSPURL} " 
-    echo $OCSPRESPONSE
+    echo -n "WARNING: status of certificate for ${CERTCN} UNKNOWN by OCSP: ${OCSPURL} "
+    echo "$OCSPRESPONSE"
     exit 1
 fi
 
 echo "$OCSPRESPONSE" | grep -q "WARNING"
 if [[ $? -eq 0 ]]; then
-    echo -n "WARNING received from ${OCSPURL}: $OCSPRESPONSE" 
+    echo -n "WARNING received from ${OCSPURL}: $OCSPRESPONSE"
     exit $WARNING
 fi
 
@@ -281,30 +288,30 @@ if [[ $? -eq 0 ]]; then
     # TODO receive the CRITICAL and WARNING thresholds as arguments. It is currently hardcoded to 15 and 20 days respectively!.
     if ! echo "${OCSPRESPONSE}" | openssl x509 -noout -checkend $(( 15 * 86400 )) > /dev/null ; then
       echo -n "CRITICAL: OCSP responder certificate will expire in less than 15 days."
-      echo $OCSPRESPONSE
+      echo "$OCSPRESPONSE"
       exit $CRITICAL
     fi
     if ! echo "${OCSPRESPONSE}" | openssl x509 -noout -checkend $(( 20 * 86400 )) > /dev/null ; then
       echo -n "WARNING: OCSP responder certificate will expire in less than 20 days."
-      echo $OCSPRESPONSE
+      echo "$OCSPRESPONSE"
       exit $WARNING
     fi
     echo -n "OK: OCSP up and running. OCSP signer certificate not about to expire. Status of certificate for ${CERTCN} GOOD by OCSP: ${OCSPURL} "
-    echo $OCSPRESPONSE
+    echo "$OCSPRESPONSE"
     exit $OK
 fi
 
 echo "$OCSPRESPONSE" | grep -q "unauthorized"
 if [[ $? -eq 0 ]]; then
-    echo -n "WARNING: OCSP Responder Error: unauthorized (6) "  
-    echo $OCSPRESPONSE
+    echo -n "WARNING: OCSP Responder Error: unauthorized (6) "
+    echo "$OCSPRESPONSE"
     exit $WARNING
 fi
 
 
 # If we get here, then openssl propably ran with exit code 0, but we did not recognize the output
 echo "Could not parse output from openssl command"
-echo $OCSPRESPONSE
+echo "$OCSPRESPONSE"
 echo "----"
 echo "Command used: $OPENSSL_COMMAND" 
 exit $UNKNOWN
