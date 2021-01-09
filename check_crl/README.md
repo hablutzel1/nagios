@@ -12,9 +12,9 @@ This is a nagios plugin which you can use to check if a CRL (Certificate Revocat
 
 This guide covers the steps needed for Ubuntu 10.04/12.04 and Debian 6. It should also work on other distro's, but make sure to modify the commands where needed. 
 
-Make sure you have openssl, python3 and a module needed by the script installed on the nagios host:
+Make sure you have the following installed on the nagios host:
 
-    apt-get install python3 openssl python-m2crypto
+    apt-get install python3 openssl python-m2crypto python3-dnspython
 
 Now place the script on the host. I've placed in */etc/nagios/plugins/check_crl.py*.
 

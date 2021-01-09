@@ -42,14 +42,36 @@ import subprocess
 import sys
 import tempfile
 import urllib.request, urllib.parse, urllib.error
+import http.client
+import socket
+import dns.resolver
 
 # TODO evaluate to log all errors to some sensitive location.
 
-def check_crl(url, warn, crit):
+def check_crl(url, warn, crit, custom_dns_server):
     # TODO ensure that temp files are always being deleted.
     tmpcrl = tempfile.mktemp(".crl")
     #request = urllib.request.urlretrieve(url, tmpcrl)
     try:
+        if custom_dns_server is not None:
+            def MyResolver(host):
+                dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
+                dns.resolver.default_resolver.nameservers = [custom_dns_server]
+                # Using query as it has been observed that to the date (Jan 2021) the 'resolve' alternative is not present in the Ubuntu 20.04 python3-dnspython APT package.
+                answers = dns.resolver.query(host, 'A')
+                # TODO manage when 'answers' is empty.
+                for rdata in answers:
+                    return rdata.address
+
+            class MyHTTPConnection(http.client.HTTPConnection):
+                def connect(self):
+                    self.sock = socket.create_connection((MyResolver(self.host), self.port), self.timeout)
+
+            class MyHTTPHandler(urllib.request.HTTPHandler):
+                def http_open(self, req):
+                    return self.do_open(MyHTTPConnection, req)
+            opener = urllib.request.build_opener(MyHTTPHandler)
+            urllib.request.install_opener(opener)
         urllib.request.urlretrieve(url, tmpcrl)
     except Exception as e:
         # TODO evaluate to introduce  an optional argument to enable/disable verbose output including exception traces.
@@ -70,6 +92,7 @@ def check_crl(url, warn, crit):
     except:
         os.remove(tmpcrl)
         # TODO check if UNKNOWN produces a Nagios notification, otherwise maybe a WARNING or CRITICAL would be better.
+        # TODO output more details as this error condition can happen too for things different than CRL parsing, e.g. openssl binary can't be found on Windows where /usr/bin/openssl won't exist.
         print ("UNKNOWN: CRL could not be parsed: %s" % url)
         sys.exit(3)
     finally:
@@ -108,7 +131,7 @@ def check_crl(url, warn, crit):
     print (msg)
     sys.exit(exitcode)
 
-def check_crl_with_overlap(url, overlap):
+def check_crl_with_overlap(url, overlap, dns_server):
     # TODO research better on the 'skew' concept and check if EJBCA supports it for CRLs. Note that we are currently hardcoding a 20%.
     # TODO check: if EJBCA supports the skew, allow to receive it as an optional parameter with a sensitive default.
     # TODO check maybe the correct term here would be generation_tolerance_and_skew, because this time represents the skew (exists in EJBCA CRL generation?) and the time allowed for the CA to generate the CRL after the overlap starts, e.g. EJBCA service period which could be 5 minutes or so?. Maybe receive an additional optional tolerance parameter?.
@@ -117,10 +140,10 @@ def check_crl_with_overlap(url, overlap):
     skew = overlap * 20 / 100
     warn = overlap - skew
     crit = warn / 2
-    check_crl(url, warn, crit)
+    check_crl(url, warn, crit, dns_server)
 
 def usage():
-    print ("check_crl.py -h|--help -v|--verbose -u|--url=<url> -o|--overlap -w|--warning=<minutes> -c|--critical=<minutes>")
+    print ("check_crl.py -h|--help -v|--verbose -u|--url=<url> -o|--dns-server=<dnsserver> -d|--overlap -w|--warning=<minutes> -c|--critical=<minutes>")
     print ("")
     print ("Example, if you want to get a warning if a CRL expires in 8 hours and a critical if it expires in 6 hours:")
     print ("./check_crl.py -u \"http://domain.tld/url/crl.crl\" -w 480 -c 360")
@@ -129,11 +152,12 @@ def usage():
 
 def main():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hu:o:w:c:", ["help", "url=", "overlap=", "warning=", "critical="])
+        opts, args = getopt.getopt(sys.argv[1:], "hu:d:o:w:c:", ["help", "url=", "dns-server=", "overlap=", "warning=", "critical="])
     except getopt.GetoptError as err:
         usage()
         sys.exit(2)
     url = None
+    dns_server = None
     warning = None
     critical = None
     overlap = None
@@ -143,6 +167,8 @@ def main():
             sys.exit()
         elif o in ("-u", "--url"):
             url = a
+        elif o in ("-d", "--dns-server"):
+            dns_server = a
         elif o in ("-o", "--overlap"):
             overlap = a
         elif o in ("-w", "--warning"):
@@ -152,9 +178,9 @@ def main():
         else:
             assert False, "unhandled option"
     if overlap != None:
-        check_crl_with_overlap(url, int(overlap))
+        check_crl_with_overlap(url, int(overlap), dns_server)
     elif url != None and warning != None and critical != None:
-        check_crl(url, int(warning), int(critical))
+        check_crl(url, int(warning), int(critical), dns_server)
     else:
         usage()
         sys.exit(2)
